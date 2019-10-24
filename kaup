@@ -1,0 +1,9 @@
+usage() {
+	echo "Usage: kuap [username]"
+}
+
+if [[ -z "$1" ]]; then
+	usage
+else
+	ps -U $1 | awk 'NR>1' | awk '{print $1}'| xargs sudo kill -9
+fi

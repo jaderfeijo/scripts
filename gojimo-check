@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+if [ "$1" == "staging" ]; then
+	TARGET="https://staging.gojimo.net"
+elif [ "$1" == "production" ]; then
+	TARGET="https://api.gojimo.net"
+elif [ "$1" == "local" ]; then
+	TARGET="http://localhost:3000"
+else
+	echo "Usage: gojimo-check TARGET ARGS..."
+	exit
+fi
+
+gcheck "${@:2}" -t "$TARGET"

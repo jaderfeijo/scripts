@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [ "$1" == "staging" ]; then
+	GOJIMO_API_ENDPOINT="https://staging.gojimo.net/api/v4"
+elif [ "$1" == "production" ]; then
+	GOJIMO_API_ENDPOINT="https://api.gojimo.net/api/v4"
+elif [ "$1" == "local" ]; then
+	GOJIMO_API_ENDPOINT="http://localhost:3000/api/v4"
+fi
+curl -s -d '{"user":{"anonymous":true}}' "$GOJIMO_API_ENDPOINT/users" | jq -r ".authentication_token"
+

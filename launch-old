@@ -1,0 +1,238 @@
+#!/usr/bin/ruby
+
+require 'json'
+require 'plist'
+
+def archive_build(solution, project, configuration)
+	return system("/Applications/Xamarin\\ Studio.app/Contents/MacOS/mdtool -v archive -c:\"#{configuration}|iPhone\" -p:\"#{project}\" \"#{solution}\"");
+end
+
+def export_archive(export_options, archive_path, project_name)
+	ipa_path = "/var/tmp"
+	if system("xcodebuild -exportArchive -exportOptionsPlist \"#{export_options}\" -archivePath \"#{archive_path}\" -exportPath \"#{ipa_path}\"")
+		info = Plist::parse_xml(File.join(archive_path, "Info.plist"))
+		name = info['Name']
+		return File.join(ipa_path, "#{name}.ipa")
+	else
+		return nil
+	end
+end
+
+def upload_archive(ipa_path, username, app_id)
+	return system("DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS=\"-t DAV\" pilot upload --ipa \"#{ipa_path}\" --username #{username} --apple_id #{app_id} --skip_submission")
+end
+
+def find_archive_path(bundle_identifier, build_number)
+	archives_base = File.join(File.expand_path('~'), "Library/Developer/Xcode/Archives")
+	Dir[File.join(archives_base, '*')].each do |archives|
+		Dir[File.join(archives, '*.xcarchive')].each do |file|
+			info_file = File.join(file, "Info.plist")
+			archive_info = Plist::parse_xml(info_file)
+			if archive_info != nil
+				archive_bundle_identifier = archive_info['ApplicationProperties']['CFBundleIdentifier']
+				archive_build_number = archive_info['ApplicationProperties']['CFBundleVersion']
+				if bundle_identifier == archive_bundle_identifier && build_number == archive_build_number
+					return file
+				end
+			end
+		end
+	end
+	return nil
+end
+
+def increment_build_number
+	return system("build increment")
+end
+
+def git_is_clean
+	if `git status --porcelain` == ""
+		return true
+	else
+		return false
+	end
+end
+
+def git_get_branch
+	return `git rev-parse --abbrev-ref HEAD`.strip
+end
+
+def git_checkout(branch)
+	return system("git checkout #{branch}")
+end
+
+def git_pull(remote)
+	return system("git pull #{remote}")
+end
+
+def git_push(remote)
+	return system("git push #{remote}")
+end
+
+def git_tag(tag)
+	return system("git tag #{tag}")
+end	
+
+def git_push_tag(remote, tag)
+	return system("git push #{remote} #{tag}")
+end
+
+def git_commit(message)
+	return system("git add --all && git commit -a -m \"#{message}\"")
+end
+
+def git_merge(branch)
+	return system("git merge #{branch}")
+end
+
+def get_current_build
+	return `build print`.to_i
+end
+
+def get_current_version
+	return `version print`.strip
+end
+
+# check parameters
+configuration_name = ARGV[0]
+if configuration_name == nil
+	puts "Please specify a configuration name."
+	puts
+	exit 1
+end
+
+# get command
+command = ARGV[1]
+
+# load configuration
+configuration_file_name = "#{configuration_name}.json"
+if !File.file?(configuration_file_name)
+	puts "Configuration file '#{configuration_file_name}' not found."
+	puts
+	exit 1
+end
+configuration_file = File.read("#{configuration_name}.json")
+configuration = JSON.parse(configuration_file)
+
+# load parameters
+git_remote = configuration['git']['remote']
+git_tagging_format = configuration['git']['tagging']['format']
+
+build_solution = configuration['build']['solution']
+build_project = configuration['build']['project']
+build_configuration = configuration['build']['configuration']
+ 
+archive_options = configuration['archive']['options']
+
+deployment_app_id = configuration['deployment']['app_id']
+username = configuration['deployment']['username']
+
+# load project information
+project_info = Plist::parse_xml('Info.plist')
+build_number = project_info['CFBundleVersion']
+bundle_identifier = project_info['CFBundleIdentifier']
+
+if command == nil
+	# check if the repository is clean
+	puts "Checking if repository is clean..."
+	if !git_is_clean
+		puts "Your repository contains uncommitted changes."
+		puts
+		exit 1
+	end
+
+	# build & archive
+	puts "Archiving build (solution:#{build_solution}, project:#{build_project}, configuration:#{build_configuration})..."
+	if !archive_build(build_solution, build_project, build_configuration)
+		puts "Failed to build & archive project."
+		puts
+		exit 1
+	end
+
+	# find archive path
+	puts "Finding archive path..."
+	archive_path = find_archive_path(bundle_identifier, build_number)
+	if archive_path == nil
+		puts "Failed to find archive."
+		puts
+		exit 1
+	else
+		puts "Archive found at #{archive_path}."
+		puts
+	end
+
+	# export archive ipa
+	puts "Exporting archive IPA..."
+	ipa_path = export_archive(archive_options, archive_path, build_project)
+	if ipa_path == nil
+		puts "Failed to export IPA."
+		puts
+		exit 1
+	else
+		puts "Archive exported into '#{ipa_path}'."
+	end
+
+	# upload archive to Apple
+	puts "Uploading archive (ipa_path:#{ipa_path}, username:#{username}, deployment_app_id:#{deployment_app_id})..."
+	if !upload_archive(ipa_path, username, deployment_app_id)
+		File.delete(ipa_path)
+		puts "Failed to upload archive."
+		puts
+		exit 1
+	end
+
+	# clean up temp file
+	puts "Deleting temporary IPA at '#{ipa_path}'..."
+	File.delete(ipa_path)
+
+	# get current build & prepare tag string
+	current_build = get_current_build
+	tag = git_tagging_format
+	tag["{build}"] = current_build.to_s
+
+	puts "Current Build: (#{current_build})"
+
+	# tag commit
+	puts "Tagging commit '#{tag}'..."
+	if !git_tag(tag)
+		puts "Failed to tag commit '#{tag}'."
+		puts
+		exit 1
+	end
+
+	# push tag
+	puts "Pushing tag '#{tag}' to remote '#{git_remote}'..."
+	if !git_push_tag(git_remote, tag)
+		puts "Failed to push '#{tag}' to '#{git_remote}'."
+		puts
+		exit 1
+	end
+
+	# increment build number
+	puts "Incrementing build number..."
+	if !increment_build_number
+		puts "Failed to increment build number"
+		exit 1
+	end
+
+	# get current build number
+	new_build_number = get_current_build.to_s
+
+	puts "New build number: #{new_build_number}"
+
+	# commit
+	puts "Commiting build number change..."
+	if !git_commit("Increment build number (#{new_build_number})")
+		puts "Failed to commit build number increment."
+		puts
+		exit 1
+	end
+
+	puts "All done."
+	puts
+	exit 0
+else
+	puts "Unrecognised command '#{command}'."
+	puts
+	exit 1
+end
+

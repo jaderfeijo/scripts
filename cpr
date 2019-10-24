@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+
+def get_current_branch_name()
+	`git rev-parse --symbolic-full-name --abbrev-ref HEAD`.strip!
+end
+
+def get_current_github_username()
+	`git config --global user.name`.strip!
+end
+
+def get_repo_name(remote)
+	remote_url = `git config --get remote.#{remote}.url`
+	start = remote_url.index(':') + 1
+	length = remote_url.index('.', start) - start
+	remote_url[start, length]
+end
+
+def open_pull_request(upstream_repo, upstream_branch, username, branch)
+	system "open -a Safari 'https://github.com/#{upstream_repo}/compare/#{upstream_branch}...#{username}:#{branch}?expand=1'"
+end
+
+if ARGV[0] != nil && ARGV[1] != nil then
+	upstream_remote_name = ARGV[0]
+	upstream_remote_branch = ARGV[1]
+
+	open_pull_request(
+		get_repo_name(upstream_remote_name),
+		upstream_remote_branch,
+		get_current_github_username(),
+		get_current_branch_name()
+	)
+else
+	print "Not enough arguments.\n"
+	print "Usage: #{File.basename($PROGRAM_NAME)} REMOTE_NAME REMOTE_BRANCH\n"
+end
+

@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+
+require 'houston'
+
+apns_cert = ARGV[0]
+token = ARGV[1] # format: '<ce8be627 2e43e855 16033e24 b4c28922 0eeda487 9c477160 b2545e95 b68b5969>'
+
+raise "No APNS certificate specified" unless !apns_cert.to_s.empty?
+raise "No token specified" unless !token.to_s.empty?
+
+puts "Environment: development"
+puts "Certificate: #{apns_cert}"
+puts "Device token: #{token}"
+
+APN = Houston::Client.development
+APN.certificate = File.read(apns_cert)
+
+notification = Houston::Notification.new(
+  device: token
+)
+notification.alert = 'Test notification!'
+notification.custom_data = {
+  adb_deeplink: 'https://www.telegraph.co.uk/politics/2018/08/23/cabinet-split-no-deal-brexit-philip-hammond-warns-will-have/'
+}
+
+puts "Sending push..."
+APN.push(notification)
+
+puts "Done!"

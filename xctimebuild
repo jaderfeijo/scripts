@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [ -z "$1" -o -z "$2" ]; then
+	echo ""
+	echo "Usage: xctimebuild XCODE_WORKSPACE SCHEME"
+	echo ""
+	exit 1
+fi
+
+xcodebuild -workspace $1 -scheme $2 clean build OTHER_SWIFT_FLAGS="-Xfrontend -debug-time-function-bodies" | grep .[0-9]ms | grep -v ^0.[0-9]ms | sort -nr > culprits.txt
+

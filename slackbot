@@ -1,0 +1,235 @@
+#!/usr/bin/env ruby
+
+require 'net/https'
+require 'slack-ruby-client'
+require 'uptimerobot'
+require 'ztimer'
+require 'json'
+require 'pp'
+
+$stdout.sync = true
+
+class SlackBotConfiguration
+	def self.parse(name, json)
+		config = SlackBotConfiguration.new
+		config.name = name
+		config.slack_token = json['slack_token']
+		config.pushover_token = json['pushover_token']
+		config.pushover_user = json['pushover_user']
+		config.uptimerobot_token = json['uptimerobot_token']
+		config.uptimerobot_monitor = json['uptimerobot_monitor']
+		config.ping = json['ping']
+		config.username = json['username']
+		config.watch_here = json['watch_here']
+		config.watch_channel = json['watch_channel']
+		config.watch_everyone = json['watch_everyone']
+		config.watch_statuses = json['watch_statuses']
+		config.watch_mentions = json['watch_mentions']
+		config.watch_keywords = json['watch_keywords']
+		return config
+	end
+
+	attr_accessor :name
+	attr_accessor :slack_token
+	attr_accessor :pushover_token
+	attr_accessor :pushover_user
+	attr_accessor :uptimerobot_token
+	attr_accessor :uptimerobot_monitor
+	attr_accessor :ping
+	attr_accessor :username
+	attr_accessor :watch_here
+	attr_accessor :watch_channel
+	attr_accessor :watch_everyone
+	attr_accessor :watch_statuses
+	attr_accessor :watch_mentions
+	attr_accessor :watch_keywords
+end
+
+class SlackBot
+	DEFAULT_CONFIG_FILE = File.expand_path('~/.slackbot-config')
+
+	attr_accessor :users
+	attr_accessor :channels
+	attr_accessor :configurations
+	attr_accessor :config
+
+	def initialize
+		load_configuration
+	end
+
+	def start!
+		Slack.configure do |slack_config|
+			slack_config.token = config.slack_token
+		end
+
+		web_client = Slack::Web::Client.new
+		rt_client = Slack::RealTime::Client.new(websocket_ping: config.ping)
+
+		log "Set active every #{config.ping * 60}s"
+		Ztimer.every(config.ping * 60 * 1000) do
+			log "Setting as active..."
+			web_client.users_setActive()
+			log "Set @#{config.username} as active"
+			sleep(config.ping * 60)
+		end
+
+		rt_client.on :hello do
+			notify "Connected as @#{config.username} into #{config.name}"
+
+			self.users = web_client.users_list.members
+			self.channels = web_client.channels_list.channels
+
+			set_monitor_active(true)
+		end
+
+		rt_client.on :presence_change do |data|
+			username = get_user_name(data.user) || data.user
+			if config.watch_statuses.include?(username)
+				presence = data['presence']
+				notify "@#{username} is #{presence}"
+			end
+		end
+
+		rt_client.on :message do |data|
+			if data.text != nil
+				username = get_user_name(data.user)
+				if username != config.username
+					if data.channel[0] == "D"
+						notify "<@#{username}> #{data.text}"
+					elsif data.channel[0] == "G"
+						notify "<@#{username}> #{data.text}"
+					else
+						channel_name = (get_channel_name(data.channel) || get_user_id(data.channel)) || data.channel
+						if config.watch_here && data.text.include?("<!here|@here>")
+							notify "<@#{username}:##{channel_name}> #{data.text.gsub!("<!here|@here>", "@here")}"
+						elsif config.watch_channel && data.text.include?("<!channel>")
+							notify "<@#{username}:##{channel_name}> #{data.text.gsub!("<!channel>", "@channel")}"
+						elsif config.watch_everyone && data.text.include?("<!everyone>")
+							notify "<@#{username}:##{channel_name}> #{data.text.gsub!("<!everyone>", "@everyone")}"
+						else
+							config.watch_mentions.each do |u|
+								user_id = get_user_id(u) || u
+								if data.text.include?("@#{user_id}")
+									notify "<@#{username}:##{channel_name}> #{data.text.gsub!("<@#{user_id}>", "@#{u}")}"
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+
+		rt_client.on :close do |data|
+			log "Disconnecting..."
+		end
+
+		rt_client.on :closed do |data|
+			log "Disconnected!"
+			start!
+		end
+
+		log "Connecting to #{config.name}..."
+
+		rt_client.start!
+	end
+
+	def set_monitor_active(status)
+		if !config.uptimerobot_token.to_s.empty? && !config.uptimerobot_monitor.to_s.empty?
+			action = status ? "Starting" : "Stopping"
+			action_past = status ? "started" : "stopped"
+
+			log "#{action} UptimeRobot monitor '#{config.uptimerobot_monitor}'"
+
+			uptimerobot_client = UptimeRobot::Client.new(
+				api_key: config.uptimerobot_token
+			)
+			monitor = uptimerobot_client.getMonitors['monitors'].find do |m|
+				m['friendly_name'] == config.uptimerobot_monitor
+			end
+			monitor['status'] = status ? 1 : 0
+			uptimerobot_client.editMonitor(monitor)
+
+			log "UptimeRobot monitor #{action_past}!"
+		end
+	end
+
+	def notify(msg)
+		log msg
+		Net::HTTP.post_form(URI.parse("https://api.pushover.net/1/messages.json"),
+			'token' => config.pushover_token,
+			'user' => config.pushover_user,
+			'message' => msg
+		)
+	end
+
+	def log(msg)
+		puts "#{Time.now.strftime("%d/%m/%Y %H:%M")}: #{msg}"
+	end
+
+	def get_user_name(id)
+		user = self.users.find { |u| u.id == id }
+		if user != nil
+			return user.name
+		else
+			return nil
+		end
+	end
+
+	def get_user_id(name)
+		user = self.users.find { |u| u.name == name }
+		if user != nil
+			return user.id
+		else
+			return nil
+		end
+	end
+
+	def get_channel_name(id)
+		channel = self.channels.find { |c| c.id == id }
+		if channel != nil
+			return channel.name
+		else
+			return nil
+		end
+	end
+
+	def get_channel_id(name)
+		channel = self.channels.find { |c| c.name == name }
+		if channel != nil
+			return channel.id
+		else
+			return nil
+		end
+	end
+
+	private
+
+	def load_configuration()
+		if File.file?(DEFAULT_CONFIG_FILE)
+			json = JSON.parse(open(DEFAULT_CONFIG_FILE).read)	
+			json.each do |name, config|
+				configuration = SlackBotConfiguration.parse(name, config)
+				if self.config == nil
+					self.config = configuration
+				elsif ARGV[0] == name
+					self.config = configuration
+				end
+			end
+
+			if self.config == nil
+				log "Could not find configuration named '#{ARGV[0]}' in configuration file."
+				exit
+			end
+		else
+			log "Configuration file '#{DEFAULT_CONFIG_FILE}' not found."
+			exit
+		end
+	end
+end
+
+bot = SlackBot.new
+if ARGV[0] == "--stop_monitor"
+	bot.set_monitor_active(false)
+else
+	bot.start!
+end

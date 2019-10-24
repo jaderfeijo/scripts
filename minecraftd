@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+if [ "$1" == "start" ]; then
+	echo "Starting Minecraft Server..."
+	if ! [ -f ~/minecraft-server.pid ]; then
+		cd /Applications/Minecraft-Server
+		java -jar server.jar >>~/minecraft-server.log 2>>~/minecraft-server.log &
+		echo $! > ~/minecraft-server.pid
+		echo "Minecraft Server started!"
+	else
+		echo "Minecraft Server already running!"
+	fi
+elif [ "$1" == "stop" ]; then
+	echo "Stopping Minecraft Server..."
+	if [ -f ~/minecraft-server.pid ]; then
+		kill `cat ~/minecraft-server.pid`
+		rm ~/minecraft-server.pid
+		echo "Minecraft Server stopped!"
+	else
+		echo "Minecraft Server not running"
+	fi
+elif [ "$1" == "restart" ]; then
+	echo "Restarting Minecraft Server..."
+	if [ -f ~/minecraft-server.pid ]; then
+		kill `cat ~/minecraft-server.pid`
+		rm ~/minecraft-server.pid
+	fi
+	if ! [ -f ~/minecraft-server.pid ]; then
+		cd /Applications/Minecraft-Server
+		java -jar server.jar >>~/minecraft-server.log 2>>~/minecraft-server.log &
+		echo $! > ~/minecraft-server.pid
+	fi
+	echo "Minecraft Server restarted!"
+elif [ "$1" == "status" ]; then
+	if [ -f ~/minecraft-server.pid ]; then
+		echo "Running"
+	else
+		echo "Not running"
+	fi
+else
+	echo "Usage: $0 start|stop|restart|status"
+fi

@@ -1,0 +1,142 @@
+#!/usr/bin/env ruby
+require 'securerandom'
+require 'mail'
+require 'pp'
+
+class IMAPSettings
+	attr_reader :server,
+				:port,
+				:email,
+				:password
+	
+	def initialize(server, port, email, password)
+		@server = server
+		@port = port
+		@email = email
+		@password = password
+	end
+end
+
+imap_server = ENV['EXPENSIFY_IMAP_SERVER']
+imap_port = ENV['EXPENSIFY_IMAP_PORT']
+imap_email = ENV['EXPENSIFY_IMAP_EMAIL']
+imap_password = ENV['EXPENSIFY_IMAP_PASSWORD']
+path = ARGV.first
+
+def send_receipt(connection, to, from, filename, unique_id)
+	email = Mail.new do
+		from from
+		to to
+		subject "Receipt: #{unique_id}"
+		add_file :filename => "#{unique_id}.pdf", :content => File.read(filename)
+	end
+	email.delivery_method :smtp_connection, { :connection => connection }
+	email.deliver
+end
+
+def move_to_sent(receipts_root, receipt_file, unique_id)
+	sent_root = "#{receipts_root}/Sent"
+	Dir.mkdir sent_root unless File.exists? sent_root
+	
+	# move file to sent folder and rename it with unique id
+	File.rename "#{receipts_root}/#{receipt_file}", "#{sent_root}/#{unique_id}-#{receipt_file}"
+end
+
+def print_missing_env(var)
+	print "No '#{var}' specified.\n"
+	print "Please specify '#{var}' as an enviroment variable before running this script.\n"
+	print "\n"
+end
+
+def print_usage(message)
+	print "#{message}.\n"
+	print "\n"
+	print "Usage:\n"
+	print " expensify RECEIPTS_ROOT\n"
+	print "\n"
+end
+
+def send_all(path, settings)
+	path = File.expand_path(path)
+	files = Dir.entries(path).select { |e| File.file?("#{path}/#{e}") && File.extname(e).casecmp('.pdf') == 0 }
+
+	if files.count > 0
+		print "Found #{files.count} receipt#{files.count > 1 ? 's' : ''} to process\n"
+		print "\n"
+		print "Starting SMTP connection to #{settings.server}...\n"
+		
+		connection = Net::SMTP.new(settings.server, settings.port)
+		connection.enable_starttls_auto
+		connection.start(
+			settings.email.split("@").last,
+			settings.email,
+			settings.password,
+			"plain"
+		)
+		
+		print "Connection started!\n"
+		print "\n"
+	
+		Dir.entries(path).each do |entry|
+			if File.file?("#{path}/#{entry}")
+				unique_id = SecureRandom.uuid
+				send_receipt(
+					connection,
+          "receipts@expensify.com",
+					settings.email,
+					"#{path}/#{entry}",
+					unique_id
+				)
+				move_to_sent path, entry, unique_id
+				print "Sent #{entry} as #{unique_id}\n"
+			end
+		end
+		
+		connection.finish
+		
+		print "\n"
+		print "Connection closed!\n"
+	else
+		print "\n"
+		print "No pending receipts were found in #{path}."
+		print "\n"
+	end
+end
+
+if imap_server.to_s.empty?
+	print_missing_env "EXPENSIFY_IMAP_SERVER"
+	exit
+end
+
+if imap_port.to_i == 0
+	print_missing_env "EXPENSIFY_IMAP_PORT"
+	exit
+end
+
+if imap_email.to_s.empty?
+	print_missing_env "EXPENSIFY_IMAP_EMAIL"
+	exit
+end
+
+if imap_password.to_s.empty?
+	print_missing_env "EXPENSIFY_IMAP_PASSWORD"
+	exit
+end
+
+if path.to_s.empty?
+	print_usage "Please specify a path."
+	exit
+end
+
+print "==================================================\n"
+print "#{DateTime.now}\n"
+print "==================================================\n"
+
+settings = IMAPSettings::new(
+	imap_server,
+	imap_port.to_i,
+	imap_email,
+	imap_password
+)
+
+send_all(path, settings)

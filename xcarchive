@@ -1,0 +1,187 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'ostruct'
+require 'plist'
+require 'pp'
+
+class Archive
+	ARCHIVES_ROOT = File.join(File.expand_path('~'), "Library/Developer/Xcode/Archives")
+
+	def self.all_archives()
+		all_archives = Array.new
+		Dir[File.join(Archive::ARCHIVES_ROOT, '*')].each do |archives|
+			Dir[File.join(archives, '*.xcarchive')].each do |file|
+				archive = Archive.new(file)
+				all_archives.push(archive)
+			end
+		end
+		return all_archives
+	end
+
+	def self.filtered_archives(bundle = nil, version = nil, build = nil)
+		archives = Archive::all_archives
+		if bundle != nil then
+			archives = archives.select { |x| x.bundle_id == bundle }
+		end
+		if version != nil then
+			archives = archives.select { |x| x.version == version }
+		end
+		if build != nil then
+			archives = archives.select { |x| x.build == build }
+		end
+		return archives
+	end
+
+	attr_reader :path
+
+	def initialize(path)
+		@path = path
+		@info = nil
+	end
+
+	def info_file
+		return File.join(self.path, "Info.plist")
+	end
+
+	def info
+		if @info == nil then
+			@info = Plist::parse_xml(self.info_file)
+		end
+		return @info
+	end
+
+	def bundle_id
+		return self.info['ApplicationProperties']['CFBundleIdentifier']
+	end
+
+	def build
+		return self.info['ApplicationProperties']['CFBundleVersion']
+	end
+
+	def version
+		return self.info['ApplicationProperties']['CFBundleShortVersionString']
+	end
+
+	def archived_on
+		return self.info['CreationDate']
+	end
+
+	def name
+		return self.info['Name']
+	end
+
+	def description
+		str = "=================================================\n"
+		str << "Name: #{self.name}\n"
+		str << "Bundle ID: #{self.bundle_id}\n"
+		str << "Version: #{self.version}\n"
+		str << "Build: #{self.build}\n"
+		str << "Archived On: #{self.archived_on}\n"
+		str << "Path: #{self.path}\n"
+		return str
+	end
+
+	def export(path, options)
+		if system("xcodebuild -exportArchive -exportOptionsPlist \"#{options}\" -archivePath \"#{self.path}\" -exportPath \"#{path}\" &> /dev/null")
+			return File.join(path, "#{self.name}.ipa")
+		else
+			return nil
+		end
+	end
+end
+
+options = OpenStruct.new
+OptionParser.new do |opts|
+	opts.banner = "Usage: xcarchive [options]"
+
+	opts.separator ""
+	opts.separator "Specific options:"
+
+	options.path = false
+	opts.on("-p", "--path", "Print archive paths only") do
+		options.path = true
+	end
+
+	options.list = false
+	opts.on("-l", "--list", "List all builds in a human readable format") do
+		options.list = true
+	end
+
+	options.export = nil
+	opts.on("-e", "--export PATH", "Export an archive into the given path") do |path|
+		options.export = path
+	end
+
+	options.id = nil
+	opts.on("--id IDENTIFIER", "Limits the output to archives for the app with the specified bundle identifier") do |id|
+		options.id = id
+	end
+
+	options.version = nil
+	opts.on("--version VERSION", "Limits the output to archives matching the specified version") do |version|
+		options.version = version
+	end
+
+	options.build = nil
+	opts.on("--build BUILD", "Limits the output to archives matching the specified build number") do |build|
+		options.build = build
+	end
+
+	options.options = nil
+	opts.on("--options OPTIONS", "Specifies the export options file to be used when exporting builds") do |opt|
+		options.options = opt
+	end
+
+	opts.on_tail("-h", "--help", "Show this message") do
+		puts opts
+		puts
+		exit 1
+	end
+end.parse!
+
+if !options.path && !options.list && !options.export then
+	puts "You must specify at least one of the following options:"
+	puts "  --path, --list, --export"
+	puts
+	puts "Type xcarchive --help for more information"
+	puts
+	exit 1
+end
+
+archives = Archive::filtered_archives(options.id, options.version, options.build)
+if archives.count <= 0 then
+	puts "No archives found."
+	exit 1
+end
+
+if options.path && !options.list && !options.export then
+	archives.each do |archive|
+		puts archive.path
+	end
+elsif options.list && !options.path && !options.export then
+	archives.each do |archive|
+		puts archive.description
+	end
+	puts "================================================="
+	puts "Total #{archives.count} archives found."
+	puts "================================================="
+elsif options.export && !options.path && !options.list then
+	if options.options == nil then
+		puts "You must specify the xcode export options file to use:"
+		puts "	--options OPTIONS_FILE"
+		puts
+		exit 1
+	end
+
+	archives.each do |archive|
+		puts archive.export(options.export, options.options)
+	end
+else
+	puts "You must not specify more than one of the following options:"
+	puts "	--path, --list, --export"
+	puts
+	exit 1
+end
+
+exit 0

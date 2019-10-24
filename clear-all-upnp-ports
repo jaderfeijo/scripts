@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+
+class UPNPC
+	def port_maps
+		upnpc = `upnpc -l`
+	end
+
+	def delete(port_map)
+	end
+
+	def add(port_map)
+	end
+end
+
+class PortMap
+	attr_accessor :port
+	attr_accessor :protocol
+	attr_accessor :ip
+
+	def initialize(port, protocol, ip = nil)
+		@port = port
+		@protocol = protocol
+		@ip = ip
+	end
+end

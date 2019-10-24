@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Trim empty spaces from a given file, and save it.
+
+files="$(find . -name '*.swift' | grep -v 'Pods/')"
+echo "Count: $(echo -n "$files" | wc -l)"
+echo "$files" | while read file; do
+	echo "Trimming file: '$file'"
+	sed 's/[[:blank:]]*$//' "$file" | tee "$file" >/dev/null
+done

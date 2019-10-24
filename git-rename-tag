@@ -1,0 +1,16 @@
+#!/usr/bin/ruby
+
+old = ARGV[0]
+new = ARGV[1]
+remote = ARGV[2]
+
+if old == nil || new == nil || remote == nil
+	print "Invalid parameters!\n"
+	print " usage: git-rename-tag [old] [new] [remote]\n\n"
+	exit 1
+end
+
+system("git tag #{new} #{old}")
+system("git tag -d #{old}")
+system("git push #{remote} :refs/tags/#{old}")
+system("git push --tags")

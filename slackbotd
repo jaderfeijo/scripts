@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+if [ "$1" == "start" ]; then
+	echo "Starting SlackBot..."
+	if ! [ -f ~/slackbot.pid ]; then
+		slackbot >>~/slackbot.log 2>>~/slackbot.log &
+		echo $! > ~/slackbot.pid
+		echo "SlackBot started!"
+	else
+		echo "SlackBot already running!"
+	fi
+elif [ "$1" == "stop" ]; then
+	echo "Stopping SlackBot..."
+	if [ -f ~/slackbot.pid ]; then
+		slackbot --stop_monitor >>~/slackbot.log 2>>~/slackbot.log &
+		kill `cat ~/slackbot.pid`
+		rm ~/slackbot.pid
+		echo "SlackBot stopped!"
+	else
+		echo "SlackBot not running"
+	fi
+elif [ "$1" == "restart" ]; then
+	echo "Restarting SlackBot..."
+	if [ -f ~/slackbot.pid ]; then
+		kill `cat ~/slackbot.pid`
+		rm ~/slackbot.pid
+	fi
+	if ! [ -f ~/slackbot.pid ]; then
+		slackbot >>~/slackbot.log 2>>~/slackbot.log &
+		echo $! > ~/slackbot.pid
+	fi
+	echo "SlackBot restarted!"
+elif [ "$1" == "status" ]; then
+	if [ -f ~/slackbot.pid ]; then
+		echo "Running"
+	else
+		echo "Not running"
+	fi
+else
+	echo "Usage: $0 start|stop|restart|status"
+fi

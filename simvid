@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+xcrun simctl io booted recordVideo $1

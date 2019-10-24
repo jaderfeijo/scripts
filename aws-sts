@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+unset AWS_PROFILE
+unset AWS_ACCESS_KEY_ID
+unset AWS_SECRET_ACCESS_KEY
+unset AWS_SESSION_TOKEN
+
+PROFILE=$1
+MFA_CODE=$2
+
+export AWS_PROFILE=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_profile")
+
+AWS_DEV_ACCOUNT=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_dev_account")
+AWS_ROLE=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_role")
+AWS_SSO_ACCOUNT=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_sso_account")
+AWS_USER=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_user")
+AWS_SESSION_NAME=$(cat ~/.aws_profiles | jq -r ".$PROFILE.aws_session_name")
+
+echo "PROFILE=$PROFILE"
+echo "MFA_CODE=$MFA_CODE"
+
+echo "AWS_PROFILE=$AWS_PROFILE"
+echo "AWS_DEV_ACCOUNT=$AWS_DEV_ACCOUNT"
+echo "AWS_ROLE=$AWS_ROLE"
+echo "AWS_SSO_ACCOUNT=$AWS_SSO_ACCOUNT"
+echo "AWS_USER=$AWS_USER"
+echo "AWS_SESSION_NAME=$AWS_SESSION_NAME"
+
+output=$(aws sts assume-role --profile $AWS_PROFILE --role-arn arn:aws:iam::$AWS_DEV_ACCOUNT:role/$AWS_ROLE --serial-number arn:aws:iam::$AWS_SSO_ACCOUNT:mfa/$AWS_USER --output json --role-session-name $AWS_SESSION_NAME --token-code $MFA_CODE)
+
+echo $output
+
+export AWS_ACCESS_KEY_ID=$(echo $output | jq -r ".Credentials.AccessKeyId")
+export AWS_SECRET_ACCESS_KEY=$(echo $output | jq -r ".Credentials.SecretAccessKey")
+export AWS_SESSION_TOKEN=$(echo $output | jq -r ".Credentials.SessionToken")
+

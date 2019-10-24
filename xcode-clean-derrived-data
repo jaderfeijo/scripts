@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+echo "Clearning Xcode Derrived Data folder..."
+sudo rm -rfv ~/Library/Developer/Xcode/DerivedData/*
+echo "Done."

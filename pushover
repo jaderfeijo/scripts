@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+curl -s \
+  --form-string "token=$1" \
+  --form-string "user=uydx97hzfhc47v4q8hesdew53fxzmt" \
+  --form-string "message=$2" \
+  https://api.pushover.net/1/messages.json > /dev/null

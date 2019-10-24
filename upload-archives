@@ -1,0 +1,16 @@
+#!/bin/bash
+
+usage() {
+	echo "Usage: upload-archives [username@server_address] [server_port]"
+}
+
+if [ -n "$1" ]; then
+	if [ -n "$2" ]; then
+		scp -P $2 -r ~/Library/Developer/Xcode/Archives/* $1:~/Library/Developer/Xcode/Archives
+	else
+		scp -r ~/Library/Developer/Xcode/Archives/* $1:~/Library/Developer/Xcode/Archives
+	fi
+	rm -r ~/Library/Developer/Xcode/Archives/*
+else
+	usage
+fi

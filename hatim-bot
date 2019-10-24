@@ -1,0 +1,33 @@
+#!/usr/bin/ruby
+
+require 'securerandom'
+require 'csv'
+
+csv_file = ARGV[0]
+
+CSV.foreach(csv_file) do |row|
+	product_id = row[0]
+	product_title = row[1]
+	request_id = SecureRandom.uuid
+	print "{\n"\
+		  "	\"id\": \"#{request_id}\",\n"\
+		  "	\"headers\": \"X-ACCESS-TOKEN: 7lbons96lbjrbumrc7emd005ugp20bonrgc8g3rvsndtv32fhj3r21ucthm0as3j88\",\n"\
+		  "	\"url\": \"https://api.gojimo.net/api/v4/products/#{product_id}\",\n"\
+		  "	\"preRequestScript\": \"\",\n"\
+		  "	\"pathVariables\": {},\n"\
+		  "	\"method\": \"GET\",\n"\
+		  "	\"data\": [],\n"\
+		  "	\"dataMode\": \"params\",\n"\
+		  "	\"version\": 2,\n"\
+		  "	\"tests\": \"tests[\\\"Status code is 200\\\"] = responseCode.code === 200;\",\n"\
+		  "	\"sandboxFiles\": \"\",\n"\
+		  "	\"currentHelper\": \"normal\",\n"\
+		  "	\"helperAttributes\": {},\n"\
+		  "	\"time\": 1455808387592,\n"\
+		  "	\"name\": \"#{product_title}\",\n"\
+		  "	\"description\": \"\",\n"\
+		  "	\"collectionId\": \"1efc7664-3f7e-dcb6-abab-c2324cb6efa1\",\n"\
+		  "	\"responses\": []\n"\
+		"},\n"\
+end
+

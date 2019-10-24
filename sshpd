@@ -1,0 +1,20 @@
+#!/bin/bash
+
+usage() {
+	echo "Usage: sshpd [start|stop] [username@server_address]"
+}
+
+if [ "$1"  == "start" ]; then
+	if [ "$2" != "" ]; then
+		ssh -D 8080 -f -C -q -N $2
+		echo "[sshpd] service started!"
+		echo "[sshpd] listening for incoming connections on port 8080..."
+	else
+		usage
+	fi
+elif [ "$1" == "stop" ]; then
+	pkill -x ssh
+	echo "[sshpd] service stopped!"
+else
+	usage
+fi

@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+
+require 'json'
+
+# Source: https://gist.github.com/steakknife/4606598
+ENV.instance_eval do
+  VARIABLES_REGEX = /\$([a-zA-Z_]+[a-zA-Z0-9_]*)|\$\{(.+)\}/
+  
+  def expand_variables(s)
+    s.gsub(VARIABLES_REGEX) { self[$1||$2] }
+  end
+end
+
+project = ARGV[0]
+
+workfile_path = File.expand_path("~/.workconfig")
+workfile = open(workfile_path).read
+work = JSON.parse(workfile)
+
+if project == '-l'
+  work.each do |w|
+    project_name = w[0]
+    puts "#{project_name}"
+  end
+  exit 
+else
+  work.each do |w|
+    project_name = w[0]
+    if project_name == project
+      exec ENV.expand_variables("cd #{w[1]}; $SHELL")
+      exit
+    end
+  end
+end
+
+project_path = File.expand_path("#{ENV['DEV_ROOT']}/#{project}", '/')
+if File.directory?(project_path) then
+  exec ENV.expand_variables("cd #{project_path}; $SHELL")
+  exit
+end
+
+puts "Unknown project: #{project}"
+exit false

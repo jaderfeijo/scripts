@@ -1,0 +1,3 @@
+ssh $1@$2 "osascript -e 'tell application \"Terminal\" to activate' -e 'tell application \"Terminal\" to do script \"nc -l 1234\"' >> /dev/null"
+sleep 3
+telnet $2 1234

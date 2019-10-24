@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+if [ $# -gt "1" ]; then
+	(pv -n $1 | dd of=$2 bs=128m conv=notrunc,noerror) > clone.log 2>&1 | dialog --gauge "Cloning #{$1} into #{$2}, please wait..." 10 70 0
+	if [ -e "clone.log" ]; then
+		cat clone.log
+		rm clone.log
+	fi
+else
+	echo "Insufficient parameters!"
+	echo "	usage: clone INPUT_FILE OUTPUT_FILE"
+fi
