@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
-echo "Clearning Xcode Derrived Data folder..."
-sudo rm -rfv ~/Library/Developer/Xcode/DerivedData/*
-echo "Done."
+if [ "$1" = "-v" ]; then
+	args="-rfv"
+else
+	args="-rf"
+fi
+
+echo "💥 - Clearing Xcode Derrived Data folder..."
+sudo rm ${args} ~/Library/Developer/Xcode/DerivedData/*
+echo "💥 - Clearing Xcode Swift Package Manager Cache..."
+sudo rm ${args} ~/Library/Caches/org.swift.swiftpm/*
+echo "✅ - Done. 🎉"
