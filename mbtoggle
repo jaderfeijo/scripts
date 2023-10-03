@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# WIP: This script does not currently work
+
+# Get the current setting for auto-hiding the menu bar
+visible=$(defaults read NSGlobalDomain AppleMenuBarVisibleInFullscreen)
+
+# If the current setting is 1 (visible), then set it to hide only in full screen mode (0)
+if [ "$visible" -eq 1 ]; then
+    echo "Menu bar in full screen mode is currently set to visible"
+    defaults write NSGlobalDomain AppleMenuBarVisibleInFullscreen -bool false
+    echo "Menu bar in full screen mode set to: HIDDEN"
+else
+    echo "Menu bar in full screen mode is currently set to hidden"
+	 defaults write NSGlobalDomain AppleMenuBarVisibleInFullscreen -bool true
+    echo "Menu bar set in full screen mode set to: VISIBLE"
+fi
+
+# Restart the process to apply changes
+killall SystemUIServer
